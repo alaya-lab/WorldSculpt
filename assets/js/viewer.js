@@ -152,7 +152,9 @@ class Viewer {
     scenes.forEach((s, i) => {
       const b = document.createElement("button");
       b.className = "scene-tab" + (i === 0 ? " active" : "");
-      b.textContent = s.label;
+      // label on top, object count underneath (omitted when the scene has no `n`)
+      b.innerHTML = '<span>' + s.label + '</span>' +
+        (s.n ? '<span class="n">' + s.n.toLocaleString("en-US") + ' objects</span>' : "");
       b.addEventListener("click", () => {
         holder.querySelectorAll(".scene-tab").forEach((t) => t.classList.remove("active"));
         b.classList.add("active");

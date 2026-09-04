@@ -239,9 +239,13 @@ h1 .grad-text{display:inline-block;padding-bottom:6px}
 }
 .scene-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .scene-tab{
-  font-size:13.5px;font-weight:500;color:var(--text-2);padding:8px 15px;border-radius:9px;cursor:pointer;
+  font-size:13.5px;font-weight:500;color:var(--text-2);padding:7px 15px;border-radius:9px;cursor:pointer;
   border:1px solid transparent;background:transparent;font-family:var(--font-b);transition:.2s;
+  display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.3;
 }
+.scene-tab .n{font-family:var(--font-m);font-size:10.5px;font-weight:400;color:var(--text-3);letter-spacing:.02em}
+.scene-tab:hover .n{color:var(--text-2)}
+.scene-tab.active .n{color:var(--text-2)}
 .scene-tab:hover{color:var(--text);background:var(--surface-2)}
 .scene-tab.active{color:var(--text);background:var(--surface-2);border-color:var(--stroke-2)}
 .viewer-ctrl{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
@@ -408,12 +412,14 @@ window.WS_CONFIG = {
   // verbatim, so the geometry is bit-identical to the source files.
   // 2,298 objects / 113.6M triangles across the six scenes.
   scenes: [
-    { id: "res-2", label: "Abandoned City",  glb: "assets/models/results/scene_00002.glb" },
-    { id: "res-4", label: "Office",          glb: "assets/models/results/scene_00004.glb", yaw: 180 },
-    { id: "res-1", label: "Hangar",          glb: "assets/models/results/scene_00001.glb" },
-    { id: "res-3", label: "Cathedral",       glb: "assets/models/results/scene_00003.glb", yaw: 180 },
-    { id: "res-5", label: "Japanese School", glb: "assets/models/results/scene_00005.glb" },
-    { id: "res-6", label: "Desert Town",     glb: "assets/models/results/scene_00006.glb" }
+    // `n` is the object count shown under each tab label. Kept in sync with the
+    // per-scene totals printed by _tools/build_assets.py on every rebuild.
+    { id: "res-2", label: "Abandoned City",  n:  92, glb: "assets/models/results/scene_00002.glb" },
+    { id: "res-4", label: "Office",          n: 678, glb: "assets/models/results/scene_00004.glb", yaw: 180 },
+    { id: "res-3", label: "Cathedral",       n: 145, glb: "assets/models/results/scene_00003.glb", yaw: 180 },
+    { id: "res-5", label: "Japanese School", n: 511, glb: "assets/models/results/scene_00005.glb" },
+    { id: "res-6", label: "Desert Town",     n: 701, glb: "assets/models/results/scene_00006.glb" },
+    { id: "res-1", label: "Hangar",          n: 171, glb: "assets/models/results/scene_00001.glb" }
   ],
   // WorldSculpt on generated 3DGS worlds (Marble section). Each scene has
   // `${base}.splat` (pruned 3D Gaussian scene, 800k splats) and `${base}.glb`
