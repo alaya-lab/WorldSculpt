@@ -774,7 +774,7 @@ class MarbleViewer extends Viewer {
         this.root.add(gltf.scene);
         this._prepareObjects();
         this._frameScene(true);
-        if (this.hudCount) this.hudCount.textContent = this.objects.length + " part meshes · 400k gaussians";
+        if (this.hudCount) this.hudCount.textContent = this.objects.length + " part meshes · 800k gaussians";
         this._applyLayerState();
       },
       undefined,
