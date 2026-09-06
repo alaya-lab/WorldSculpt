@@ -1,0 +1,167 @@
+{
+  "source": "10w_repair_nonmanifold_fill0p5",
+  "settings": {
+    "positionBits": 16,
+    "normalBits": 10,
+    "speed": 5,
+    "version": 4
+  },
+  "scenes": [
+    {
+      "id": "1",
+      "objects": 171,
+      "triangles": 16524343,
+      "bytes": 54251720,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00001_part01.glb",
+          "bytes": 46822692,
+          "objects": 148,
+          "triangles": 14300708
+        },
+        {
+          "url": "assets/models/results-10w/scene_00001_part02.glb",
+          "bytes": 7429028,
+          "objects": 23,
+          "triangles": 2223635
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "objects": 92,
+      "triangles": 8916672,
+      "bytes": 28937580,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00002_part01.glb",
+          "bytes": 28937580,
+          "objects": 92,
+          "triangles": 8916672
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "objects": 145,
+      "triangles": 14034908,
+      "bytes": 45653120,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00003_part01.glb",
+          "bytes": 45653120,
+          "objects": 145,
+          "triangles": 14034908
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "objects": 678,
+      "triangles": 65567001,
+      "bytes": 217521620,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00004_part01.glb",
+          "bytes": 46963504,
+          "objects": 145,
+          "triangles": 14016180
+        },
+        {
+          "url": "assets/models/results-10w/scene_00004_part02.glb",
+          "bytes": 46894576,
+          "objects": 145,
+          "triangles": 14049057
+        },
+        {
+          "url": "assets/models/results-10w/scene_00004_part03.glb",
+          "bytes": 46975580,
+          "objects": 152,
+          "triangles": 14662408
+        },
+        {
+          "url": "assets/models/results-10w/scene_00004_part04.glb",
+          "bytes": 46806640,
+          "objects": 145,
+          "triangles": 14015301
+        },
+        {
+          "url": "assets/models/results-10w/scene_00004_part05.glb",
+          "bytes": 29881320,
+          "objects": 91,
+          "triangles": 8824055
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "objects": 511,
+      "triangles": 49326449,
+      "bytes": 160424724,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00005_part01.glb",
+          "bytes": 47053868,
+          "objects": 150,
+          "triangles": 14459161
+        },
+        {
+          "url": "assets/models/results-10w/scene_00005_part02.glb",
+          "bytes": 47017360,
+          "objects": 151,
+          "triangles": 14564142
+        },
+        {
+          "url": "assets/models/results-10w/scene_00005_part03.glb",
+          "bytes": 46977592,
+          "objects": 151,
+          "triangles": 14625898
+        },
+        {
+          "url": "assets/models/results-10w/scene_00005_part04.glb",
+          "bytes": 19375904,
+          "objects": 59,
+          "triangles": 5677248
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "objects": 701,
+      "triangles": 67809321,
+      "bytes": 224403832,
+      "chunks": [
+        {
+          "url": "assets/models/results-10w/scene_00006_part01.glb",
+          "bytes": 46853100,
+          "objects": 145,
+          "triangles": 14022599
+        },
+        {
+          "url": "assets/models/results-10w/scene_00006_part02.glb",
+          "bytes": 46932896,
+          "objects": 147,
+          "triangles": 14207795
+        },
+        {
+          "url": "assets/models/results-10w/scene_00006_part03.glb",
+          "bytes": 46965748,
+          "objects": 148,
+          "triangles": 14313506
+        },
+        {
+          "url": "assets/models/results-10w/scene_00006_part04.glb",
+          "bytes": 46848092,
+          "objects": 148,
+          "triangles": 14339639
+        },
+        {
+          "url": "assets/models/results-10w/scene_00006_part05.glb",
+          "bytes": 36803996,
+          "objects": 113,
+          "triangles": 10925782
+        }
+      ]
+    }
+  ]
+}

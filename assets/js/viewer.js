@@ -10,6 +10,7 @@
      explode-view slider, auto-rotate
    ============================================================ */
 import * as THREE from "three";
+import { loadSceneChunks } from "./scene-chunks.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -19,6 +20,7 @@ const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath("assets/vendor/three/addons/libs/draco/gltf/");
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
+dracoLoader.setWorkerLimit(2);
 
 document.querySelectorAll(".ws-viewer").forEach((el) => initWhenVisible(el));
 
@@ -113,7 +115,33 @@ class Viewer {
     this._buildTabs(scenes);
     this.loadScene(scenes[0]);
 
-    this.renderer.setAnimationLoop(() => this._tick());
+    this._onScreen = false;
+    new IntersectionObserver(entries => {
+      this._onScreen = entries.some(e => e.isIntersecting);
+    }, { rootMargin: "100px" }).observe(container);
+    // Optional local diagnostics: ?perf=1 (not shown on the normal homepage).
+    if (new URLSearchParams(location.search).has("perf")) {
+      this._perfOutput = document.createElement("output");
+      this._perfOutput.className = "ws-perf";
+      this._perfOutput.style.cssText = "position:absolute;right:12px;bottom:12px;z-index:5;background:#111d;color:#fff;padding:6px 9px;font:12px monospace;pointer-events:none";
+      this.canvas.parentElement.appendChild(this._perfOutput);
+    }
+    let frames = 0, sampleStart = performance.now();
+    this.renderer.setAnimationLoop(() => {
+      if (!this._onScreen) { frames = 0; sampleStart = performance.now(); return; }
+      this._tick();
+      if (this._perfOutput) {
+        frames++;
+        const now = performance.now();
+        if (now - sampleStart >= 1000) {
+          this._perfOutput.textContent = (frames * 1000 / (now - sampleStart)).toFixed(1) + " FPS · " +
+            this.renderer.info.render.triangles.toLocaleString("en-US") + " triangles · " +
+            this.renderer.info.render.calls + " draws" +
+            (this._loadSeconds ? " · loaded " + this._loadSeconds.toFixed(1) + "s" : "");
+          frames = 0; sampleStart = now;
+        }
+      }
+    });
   }
 
   /* -------------------- loading overlay -------------------- */
@@ -205,63 +233,147 @@ class Viewer {
       downAt = null;
       if (moved > 6) return; // it was a drag, not a click
       rectPos(e);
-      this._pick();
+      this._pick(true);
       if (this.hovered) this._isolate(this.hovered);
       else this._clearIsolate();
     });
   }
 
   /* -------------------- scene loading -------------------- */
-  loadScene(cfg) {
+  _adoptModel(gltf) {
+      // A tiny second primitive preserves zero-area source triangles that Draco
+      // otherwise drops. Join it back into its object for picking and explode.
+      for (const node of [...gltf.scene.children]) {
+        if (node.isMesh || !node.children.length) continue;
+        const parts = node.children;
+        if (!parts.every(part => part.isMesh)) continue;
+        const vertexCount = parts.reduce((n, part) => n + part.geometry.attributes.position.count, 0);
+        const indexCount = parts.reduce((n, part) => n + (part.geometry.index?.count ?? part.geometry.attributes.position.count), 0);
+        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3);
+        const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
+        let vertexOffset = 0, indexOffset = 0;
+        for (const part of parts) {
+          const geometry = part.geometry;
+          if (!geometry.attributes.normal) geometry.computeVertexNormals();
+          positions.set(geometry.attributes.position.array, vertexOffset * 3);
+          normals.set(geometry.attributes.normal.array, vertexOffset * 3);
+          const count = geometry.index?.count ?? geometry.attributes.position.count;
+          for (let i = 0; i < count; i++) indices[indexOffset + i] = vertexOffset + (geometry.index ? geometry.index.getX(i) : i);
+          indexOffset += count;
+          vertexOffset += geometry.attributes.position.count;
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+        const merged = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+        merged.name = node.name;
+        node.updateMatrix();
+        merged.applyMatrix4(node.matrix);
+        this._disposeModel(node);
+        gltf.scene.remove(node);
+        gltf.scene.add(merged);
+      }
+      // Keep object colors stable regardless of whether a node had two primitives.
+      gltf.scene.children.sort((a, b) => Number(a.name.slice(3)) - Number(b.name.slice(3)));
+      gltf.scene.traverse(o => {
+        if (!o.isMesh) return;
+        if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+        for (const material of [o.material].flat()) material?.dispose();
+        o.material = clayMaterial(this.objects.length);
+        this.objects.push(o);
+      });
+      this.root.add(gltf.scene);
+  }
+
+  _disposeModel(root) {
+    const geometries = new Set(), materials = new Set(), textures = new Set();
+    root.traverse(o => {
+      if (o.geometry) geometries.add(o.geometry);
+      for (const material of [o.material, o.userData.baseMat, o.userData.hoverMat].flat()) {
+        if (material && material !== this.ghostMat) materials.add(material);
+      }
+    });
+    for (const material of materials) {
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+      material.dispose();
+    }
+    textures.forEach(t => t.dispose());
+    geometries.forEach(g => g.dispose());
+  }
+
+  async loadScene(cfg) {
+    this._loadController?.abort();
+    const controller = new AbortController();
+    this._loadController = controller;
+    const loadStarted = performance.now();
+    this._loadSeconds = null;
+    const { signal } = controller;
     this.cfg = cfg;
     this._clearIsolate();
     this.hovered = null;
     this.explodeT = 0;
     if (this.slider) this.slider.value = 0;
-
-    // dispose previous
-    this.root.traverse((o) => {
-      if (o.isMesh) {
-        o.geometry.dispose();
-        if (o.material !== this.ghostMat) o.material.dispose && o.material.dispose();
-      }
-    });
+    this._disposeModel(this.root);
     this.root.clear();
+    this.root.visible = false;
     this.objects = [];
-
-    const done = (isPlaceholder) => {
-      this._loaderHide();
-      if (this.hudPh) this.hudPh.style.display = isPlaceholder ? "" : "none";
+    if (this.hudPh) this.hudPh.style.display = "none";
+    if (this.hudCount) this.hudCount.textContent = "Loading scene…";
+    this._loaderShow("Loading " + (cfg.label || "scene") + "…");
+    const adopt = gltf => this._adoptModel(gltf);
+    try {
+      let info;
+      if (cfg.manifest) {
+        info = await loadSceneChunks({
+          manifestUrl: cfg.manifest, sceneId: cfg.scene, signal,
+          decode: buffer => gltfLoader.parseAsync(buffer, ""),
+          dispose: gltf => this._disposeModel(gltf.scene),
+          onChunk: adopt,
+          onProgress: progress => {
+            if (signal.aborted || !this.loaderEl) return;
+            const { phase, index, count, loaded, total } = progress;
+            this.loaderEl.classList.toggle("indeterminate", phase === "decode");
+            this.loaderEl.querySelector(".ws-loader-fill").style.width = (100 * loaded / total).toFixed(1) + "%";
+            this.loaderEl.querySelector(".ws-loader-label").textContent =
+              (phase === "decode" ? "Decoding" : "Loading") + " " + cfg.label +
+              " · " + index + "/" + count + " · " + (loaded / 1048576).toFixed(1) +
+              " / " + (total / 1048576).toFixed(1) + " MB";
+          }
+        });
+      } else if (cfg.glb) {
+        const gltf = await gltfLoader.loadAsync(cfg.glb);
+        if (signal.aborted) { this._disposeModel(gltf.scene); return; }
+        adopt(gltf);
+      } else {
+        this._buildPlaceholder(cfg.id || "demo");
+        if (this.hudPh) this.hudPh.style.display = "";
+      }
+      if (signal.aborted) return;
+      if (info && this.objects.length !== info.objects) throw new Error("Model object count mismatch");
+      this._loadSeconds = (performance.now() - loadStarted) / 1000;
+      this.root.visible = true;
       this._prepareObjects();
-      this._frameScene(true);
+      this._frameScene();
+      this._loaderHide();
       if (this.hudCount) this.hudCount.textContent = this.objects.length.toLocaleString("en-US") + " objects";
-    };
-
-    if (cfg.glb) {
-      this._loaderShow("Loading " + (cfg.label || "scene") + "…");
-      gltfLoader.load(
-        cfg.glb,
-        (gltf) => {
-          gltf.scene.traverse((o) => {
-            if (o.isMesh) {
-              if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-              o.material = clayMaterial(this.objects.length); // per-object base color
-              this.objects.push(o);
-            }
-          });
-          this.root.add(gltf.scene);
-          done(false);
-        },
-        (evt) => this._loaderProgress(evt, cfg.label || "scene"),
-        () => { this._buildPlaceholder(cfg.id); done(true); } // missing file -> placeholder
-      );
-    } else {
-      this._buildPlaceholder(cfg.id || "demo");
-      done(true);
+      return true;
+    } catch (error) {
+      if (signal.aborted) return;
+      this._disposeModel(this.root);
+      this.root.clear();
+      this.objects = [];
+      this.root.visible = true;
+      if (this.hudCount) this.hudCount.textContent = "Scene could not load";
+      if (this.loaderEl) {
+        this.loaderEl.classList.remove("indeterminate");
+        this.loaderEl.querySelector(".ws-loader-label").textContent = "Unable to load scene. Select the scene again to retry.";
+      }
+      console.error("Scene load failed:", error);
+      return false;
     }
   }
 
-  /* -------------------- procedural placeholder scene -------------------- */
   _buildPlaceholder(seedStr) {
     const rnd = mulberry32(hashStr(seedStr));
     const mat = () => clayMaterial(this.objects.length);
@@ -375,7 +487,15 @@ class Viewer {
   }
 
   /* -------------------- hover / isolate -------------------- */
-  _pick() {
+  _pick(force = false) {
+    if (!this.root.visible || Math.abs(this.pointer.x) > 1 || Math.abs(this.pointer.y) > 1) {
+      if (this.hovered) this._setHover(this.hovered, false);
+      this.hovered = null;
+      return;
+    }
+    const now = performance.now();
+    if (!force && now - (this._lastPickTime || 0) < 150) return;
+    this._lastPickTime = now;
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObjects(this.objects, false);
     const hit = hits.length ? hits[0].object : null;
@@ -692,12 +812,12 @@ class MarbleViewer extends Viewer {
 
   /* both passes share the full-canvas camera (a true "wipe"), so picking
      uses normal NDC — but only where the mesh side is actually visible */
-  _pick() {
+  _pick(force = false) {
     if (this.pointer.x < this.split * 2 - 1) { // pointer on the splat side
       if (this.hovered) { this._setHover(this.hovered, false); this.hovered = null; this.canvas.style.cursor = "grab"; }
       return;
     }
-    super._pick();
+    super._pick(force);
   }
 
   _tick() {
@@ -718,7 +838,7 @@ class MarbleViewer extends Viewer {
     this.renderer.setViewport(0, 0, size.x, size.y); // full frame for both passes
     this.renderer.setScissorTest(true);
     // left of the divider: 3DGS
-    if (this.splatViewer) {
+    if (this.splatViewer && this._splatReady) {
       this.splatViewer.visible = true;
       this.root.visible = false;
       this.renderer.setScissor(0, 0, splitPx, size.y);
@@ -726,86 +846,68 @@ class MarbleViewer extends Viewer {
       this.splatViewer.visible = false;
     }
     // right of the divider: part meshes
-    this.root.visible = true;
-    if (this.meshRoot) this.meshRoot.visible = true;
+    this.root.visible = !!this._meshReady && !this._meshFailed;
     this.renderer.setScissor(splitPx, 0, size.x - splitPx, size.y);
     this.renderer.render(this.scene, this.camera);
     this.renderer.setScissorTest(false);
   }
 
-  loadScene(cfg) {
-    this.cfg = cfg;
-    this._clearIsolate();
-    this.hovered = null;
-    this.explodeT = 0;
-    if (this.slider) this.slider.value = 0;
+  _loaderHide() {
+    if (this._meshReady && this._splatReady) super._loaderHide();
+  }
 
-    // dispose previous meshes
-    this.root.traverse((o) => {
-      if (o.isMesh && o.geometry) {
-        o.geometry.dispose();
-        if (o.material && o.material !== this.ghostMat) o.material.dispose && o.material.dispose();
-      }
-    });
-    this.root.clear();
-    this.objects = [];
-    this.meshRoot = null;
-
-    // dispose previous splat viewer
+  async loadScene(cfg) {
+    this._meshReady = false;
+    this._splatReady = false;
+    this._meshFailed = false;
     if (this.splatViewer) {
       const old = this.splatViewer;
       this.splatViewer = null;
       this.scene.remove(old);
-      try { old.viewer.dispose(); } catch (e) { /* mid-load dispose can throw; ignore */ }
+      try { old.viewer.dispose(); } catch (error) { console.debug("Splat cleanup:", error); }
     }
-
-    this._loaderShow("Loading " + (cfg.label || "scene") + "…");
-
-    // part meshes
-    gltfLoader.load(
-      cfg.base + ".glb",
-      (gltf) => {
-        gltf.scene.traverse((o) => {
-          if (o.isMesh) {
-            if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-            o.material = clayMaterial(this.objects.length);
-            this.objects.push(o);
-          }
-        });
-        this.meshRoot = gltf.scene;
-        this.root.add(gltf.scene);
-        this._prepareObjects();
-        this._frameScene(true);
-        if (this.hudCount) this.hudCount.textContent = this.objects.length + " part meshes · 800k gaussians";
-        this._applyLayerState();
-      },
-      undefined,
-      () => { this._loaderHide(); }
-    );
-
-    // 3DGS scene
+    const meshTask = super.loadScene(cfg);
+    const controller = this._loadController;
+    const current = () => this._loadController === controller && !controller.signal.aborted;
     const dv = new DropInViewer({ sharedMemoryForWorkers: false });
     this.splatViewer = dv;
     this.scene.add(dv);
-    dv.addSplatScene(cfg.base + ".splat", {
+    let splatError = null;
+    const splatTask = dv.addSplatScene(cfg.base + ".splat", {
       showLoadingUI: false,
       splatAlphaRemovalThreshold: 5,
       progressiveLoad: false,
-      onProgress: (pct) => {
-        if (dv !== this.splatViewer || !this.loaderEl || !this.loaderEl.classList.contains("show")) return;
-        const label = this.loaderEl.querySelector(".ws-loader-label");
-        this.loaderEl.querySelector(".ws-loader-fill").style.width = pct.toFixed(1) + "%";
-        if (pct >= 100) {
-          this.loaderEl.classList.add("indeterminate");
-          label.textContent = "Preparing gaussians…";
-        } else {
-          label.textContent = "Loading " + (cfg.label || "scene") + " — " + pct.toFixed(0) + "%";
-        }
+      onProgress: pct => {
+        if (!current() || !this._meshReady || !this.loaderEl) return;
+        this.loaderEl.classList.add("indeterminate");
+        this.loaderEl.querySelector(".ws-loader-label").textContent = pct >= 100 ?
+          "Preparing gaussians…" : "Loading gaussians · " + pct.toFixed(0) + "%";
       }
     }).then(() => {
-      if (dv !== this.splatViewer) return;
+      if (!current()) return;
+      this._splatReady = true;
       this._loaderHide();
-      this._applyLayerState();
-    }).catch(() => { if (dv === this.splatViewer) this._loaderHide(); });
+    }).catch(error => {
+      if (!current()) return;
+      splatError = error;
+      console.error("Gaussian scene load failed:", error);
+    });
+    const meshOk = await meshTask;
+    if (!current()) return;
+    this._meshReady = true;
+    this._meshFailed = !meshOk;
+    if (meshOk && this.hudCount) this.hudCount.textContent = this.objects.length + " part meshes · 800k gaussians";
+    if (meshOk && !this._splatReady && this.loaderEl) {
+      this.loaderEl.classList.add("indeterminate");
+      this.loaderEl.querySelector(".ws-loader-label").textContent = "Preparing gaussians…";
+    }
+    await splatTask;
+    if (!current()) return;
+    if (!meshOk || splatError) {
+      this.loaderEl?.classList.remove("indeterminate");
+      if (this.loaderEl) this.loaderEl.querySelector(".ws-loader-label").textContent =
+        "Unable to load " + (!meshOk ? "meshes" : "gaussians") + ". Select the scene again to retry.";
+      this.loaderEl?.classList.add("show");
+    } else this._loaderHide();
   }
 }

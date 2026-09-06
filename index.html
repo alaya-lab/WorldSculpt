@@ -401,35 +401,27 @@ footer .fnote{font-size:12.5px;margin-top:10px}
      ============================================================ -->
 <script>
 window.WS_CONFIG = {
-  // Interactive 3D demo scenes. Put your .glb files in assets/models/
-  // and update the paths below. Keep one mesh per object inside the GLB
-  // to enable per-object hover / isolate / explode interactions.
-  // While a file is missing, the viewer shows a procedural placeholder.
-  // WorldSculpt reconstruction results, one Draco-compressed GLB per scene
-  // (one named mesh per object, names drive the hover tooltip / isolate label).
-  // Built by _tools/merge_draco.py, which concatenates the hole-filled
-  // per-object GLBs without re-encoding them - the Draco payloads are copied
-  // verbatim, so the geometry is bit-identical to the source files.
-  // 2,298 objects / 113.6M triangles across the six scenes.
+  // Full-resolution reconstruction, 10w_repair_nonmanifold_fill0p5.
+  // Independent Draco chunks below 50 MiB; no LOD or mesh simplification.
+  // Built and verified by _tools/fullres/build.cjs. Scene switching releases
+  // previous meshes; each object keeps its name and GLB -> Y-up placement.
   scenes: [
-    // `n` is the object count shown under each tab label. Kept in sync with the
-    // per-scene totals printed by _tools/build_assets.py on every rebuild.
-    { id: "res-2", label: "Abandoned City",  n:  92, glb: "assets/models/results/scene_00002.glb" },
-    { id: "res-4", label: "Office",          n: 678, glb: "assets/models/results/scene_00004.glb", yaw: 180 },
-    { id: "res-3", label: "Cathedral",       n: 145, glb: "assets/models/results/scene_00003.glb", yaw: 180 },
-    { id: "res-5", label: "Japanese School", n: 511, glb: "assets/models/results/scene_00005.glb" },
-    { id: "res-6", label: "Desert Town",     n: 701, glb: "assets/models/results/scene_00006.glb" },
-    { id: "res-1", label: "Hangar",          n: 171, glb: "assets/models/results/scene_00001.glb" }
+    { id: "res-2", scene: "2", label: "Abandoned City", n: 92, manifest: "assets/models/results-10w/manifest.json" },
+    { id: "res-4", scene: "4", label: "Office", n: 678, manifest: "assets/models/results-10w/manifest.json", yaw: 180 },
+    { id: "res-3", scene: "3", label: "Cathedral", n: 145, manifest: "assets/models/results-10w/manifest.json", yaw: 180 },
+    { id: "res-5", scene: "5", label: "Japanese School", n: 511, manifest: "assets/models/results-10w/manifest.json" },
+    { id: "res-6", scene: "6", label: "Desert Town", n: 701, manifest: "assets/models/results-10w/manifest.json" },
+    { id: "res-1", scene: "1", label: "Hangar", n: 171, manifest: "assets/models/results-10w/manifest.json" }
   ],
   // WorldSculpt on generated 3DGS worlds (Marble section). Each scene has
-  // `${base}.splat` (pruned 3D Gaussian scene, 800k splats) and `${base}.glb`
-  // (reconstructed part meshes, draco). Built from dataset/marble by
-  // ply2splat.py + tools_process_scene-style merge.
+  // `${base}.splat` retains the source Gaussian scene (800k splats).
+  // Full-resolution replacement meshes load from the separate chunk manifest.
+  // Built by _tools/fullres/build.cjs --marble.
   marbleScenes: [
-    { id: "mb-1", label: "Countryside View", base: "assets/models/marble/marble_serene_living_room_countryside_view", yaw: 180 },
-    { id: "mb-2", label: "Purple World",     base: "assets/models/marble/marble_purple_world", yaw: 180 },
-    { id: "mb-3", label: "Anime Room",       base: "assets/models/marble/marble_anime_room_on_a_rainy_day", yaw: 180 },
-    { id: "mb-4", label: "Warm Livingroom",  base: "assets/models/marble/marble_warm_and_inviting_living_room" }
+    { id: "mb-1", label: "Countryside View", base: "assets/models/marble/marble_serene_living_room_countryside_view", manifest: "assets/models/marble-10w/manifest.json", scene: "marble_serene_living_room_countryside_view", yaw: 180 },
+    { id: "mb-2", label: "Purple World",     base: "assets/models/marble/marble_purple_world", manifest: "assets/models/marble-10w/manifest.json", scene: "marble_world", yaw: 180 },
+    { id: "mb-3", label: "Anime Room",       base: "assets/models/marble/marble_anime_room_on_a_rainy_day", manifest: "assets/models/marble-10w/manifest.json", scene: "marble_anime_room_on_a_rainy_day", yaw: 180 },
+    { id: "mb-4", label: "Warm Livingroom",  base: "assets/models/marble/marble_warm_and_inviting_living_room", manifest: "assets/models/marble-10w/manifest.json", scene: "marble_warm_and_inviting_living_room" }
   ],
   // UE-MeshyScene benchmark explorer (dataset section). Each scene has
   // three files built by tools_process_dataset.py from dataset/scene_0000N:
@@ -615,7 +607,7 @@ window.WS_CONFIG = {
         </div>
       </div>
     </div>
-    <p class="fig-cap lg reveal">Rendering hundreds of individual meshes at once in a browser comes at a cost: <u>the meshes shown here are heavily decimated and compressed</u>. To obtain the original meshes, refer to the <a href="https://github.com/AlayaLab/WorldSculpt" target="_blank">GitHub repository</a>.</p>
+    <p class="fig-cap lg reveal"><strong><u>The viewer uses compressed mesh for interactive viewing.</u></strong> To obtain the original meshes, refer to the <a href="https://github.com/AlayaLab/WorldSculpt" target="_blank">GitHub repository</a>.</p>
   </div>
 </section>
 
@@ -623,7 +615,7 @@ window.WS_CONFIG = {
 <section id="marble">
   <div class="wrap">
     <h2 class="reveal">Meshifying <span class="grad-text">generated 3D worlds</span></h2>
-    <p class="lead reveal" style="margin-bottom:36px">We run WorldSculpt on 3D Gaussian Splatting scenes generated by <a href="https://www.worldlabs.ai/" target="_blank">World Labs' Marble</a>: from <b>rendered views</b> of each generated 3D Gaussian Splattings scene, WorldSculpt reconstructs instance mesh for every object — turning a radiance field into asset-ready geometry. The <b>source 3DGS scene</b> (left) and the reconstructed <b>meshes</b> (right) share one synchronized camera — drag either side, or pull the explode slider to take the parts out of the world.</p>
+    <p class="lead reveal" style="margin-bottom:36px">We run WorldSculpt on 3D Gaussian Splatting scenes generated by <a href="https://www.worldlabs.ai/" target="_blank">World Labs' Marble</a>: from <b>rendered views</b> of each generated 3D Gaussian Splattings scene, WorldSculpt reconstructs instance mesh for every object. The <b>source 3DGS scene</b> (left) and the reconstructed <b>meshes</b> (right) share one synchronized camera — drag either side, or pull the explode slider to take the parts out of the world.</p>
     <div class="card reveal ws-viewer" data-scenes="marbleScenes" data-kind="marble">
       <div class="viewer-shell">
         <canvas class="ws-canvas"></canvas>
@@ -651,7 +643,7 @@ window.WS_CONFIG = {
         </div>
       </div>
     </div>
-    <p class="fig-cap lg reveal">The Marble 3DGS is pruned to 800k gaussians for web viewing. <u>The meshes shown here are likewise heavily decimated and compressed.</u> For the original meshes, refer to the <a href="https://github.com/AlayaLab/WorldSculpt" target="_blank">GitHub repository</a>.</p>
+    <p class="fig-cap lg reveal">The Marble 3DGS is pruned to 800k gaussians for web viewing. <strong><u>The viewer uses compressed mesh for interactive viewing.</u></strong> To obtain the original meshes, refer to the <a href="https://github.com/AlayaLab/WorldSculpt" target="_blank">GitHub repository</a>.</p>
   </div>
 </section>
 

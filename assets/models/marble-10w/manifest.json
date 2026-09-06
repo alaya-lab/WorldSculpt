@@ -1,0 +1,67 @@
+{
+  "source": "10w_repair_nonmanifold_fill0p5_marble",
+  "settings": {
+    "positionBits": 16,
+    "normalBits": 10,
+    "speed": 5,
+    "version": 4
+  },
+  "scenes": [
+    {
+      "id": "marble_anime_room_on_a_rainy_day",
+      "objects": 8,
+      "triangles": 775867,
+      "bytes": 2512088,
+      "chunks": [
+        {
+          "url": "assets/models/marble-10w/scene_marble_anime_room_on_a_rainy_day_part01.glb",
+          "bytes": 2512088,
+          "objects": 8,
+          "triangles": 775867
+        }
+      ]
+    },
+    {
+      "id": "marble_serene_living_room_countryside_view",
+      "objects": 12,
+      "triangles": 1160579,
+      "bytes": 3662084,
+      "chunks": [
+        {
+          "url": "assets/models/marble-10w/scene_marble_serene_living_room_countryside_view_part01.glb",
+          "bytes": 3662084,
+          "objects": 12,
+          "triangles": 1160579
+        }
+      ]
+    },
+    {
+      "id": "marble_warm_and_inviting_living_room",
+      "objects": 16,
+      "triangles": 1555806,
+      "bytes": 4871124,
+      "chunks": [
+        {
+          "url": "assets/models/marble-10w/scene_marble_warm_and_inviting_living_room_part01.glb",
+          "bytes": 4871124,
+          "objects": 16,
+          "triangles": 1555806
+        }
+      ]
+    },
+    {
+      "id": "marble_world",
+      "objects": 10,
+      "triangles": 974594,
+      "bytes": 3079276,
+      "chunks": [
+        {
+          "url": "assets/models/marble-10w/scene_marble_world_part01.glb",
+          "bytes": 3079276,
+          "objects": 10,
+          "triangles": 974594
+        }
+      ]
+    }
+  ]
+}
